@@ -1,7 +1,7 @@
 SRC_EPD := epd_mod.c
 SRC_EPD_THERM := epd_therm_i2c.c
 SRC := $(SRC_EPD_THERM) $(SRC_EPD)
-INC :=
+INC := epd_therm.h
 
 BUILDDIR := build
 KBUILD := $(BUILDDIR)/epd
