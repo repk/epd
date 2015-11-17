@@ -13,11 +13,57 @@
 #define ERR(...) pr_err("epd: "__VA_ARGS__)
 
 #define LM75_ADDR 0x49
+#define PWM_PERIOD 5000 /* 200 KHz */
+#define PWM_DUTY_PERCENT 50
+#define PWM_DUTY (PWM_PERIOD * PWM_DUTY_PERCENT / 100)
 
 struct epd {
 	struct spi_device *spi;
 	struct i2c_client *therm;
+	struct pwm_device *pwm;
 };
+
+static int init_pwm(struct epd *epd)
+{
+	int err;
+	/**
+	 * TODO use platform data to get pwm channel id for pwm_request
+	 * (see max8997_haptic.c)
+	 * TODO use devm_pwm_get()
+	 */
+	epd->pwm = pwm_get(&epd->spi->dev, NULL);
+	if(IS_ERR(epd->pwm)) {
+		err = PTR_ERR(epd->pwm);
+		ERR("Cannot get pwm %d\n", err);
+		goto err;
+	}
+
+	err = pwm_config(epd->pwm, PWM_DUTY, PWM_PERIOD);
+	if(err < 0) {
+		ERR("Cannot configure pwm %d\n", err);
+		goto freepwm;
+	}
+
+	return 0;
+
+freepwm:
+	pwm_free(epd->pwm);
+err:
+	epd->pwm = NULL;
+	return err;
+}
+
+static int cleanup_pwm(struct epd *epd)
+{
+	if(epd->pwm == NULL)
+		return 0;
+
+	pwm_disable(epd->pwm);
+
+	pwm_free(epd->pwm);
+	epd->pwm = NULL;
+	return 0;
+}
 
 static int setup_thermal(struct epd *epd)
 {
@@ -80,6 +126,10 @@ static int epd_probe(struct spi_device *spi)
 	if(ret < 0)
 		goto fail;
 
+	ret = init_pwm(epd);
+	if(ret < 0)
+		goto fail;
+
 	/**
 	 * TODO Remove all below
 	 */
@@ -99,6 +149,7 @@ static int epd_remove(struct spi_device *spi)
 	struct epd *epd = spi_get_drvdata(spi);
 	DBG("Call epd_remove()\n");
 
+	cleanup_pwm(epd);
 	cleanup_thermal(epd);
 	if(epd)
 		kfree(epd);
