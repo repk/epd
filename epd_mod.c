@@ -3,6 +3,7 @@
 #include <linux/spi/spi.h>
 #include <linux/i2c.h>
 #include <linux/gpio.h>
+#include <linux/of.h>
 
 #include "epd_therm.h"
 
@@ -382,12 +383,23 @@ static int epd_remove(struct spi_device *spi)
 	return 0;
 }
 
+#ifdef CONFIG_OF
+static const struct of_device_id epd_dt_ids[] = {
+	{
+		.compatible = "epd",
+	},
+	{},
+};
+MODULE_DEVICE_TABLE(of, epd_dt_ids);
+#endif
+
 /**
  * TODO support pm suspend/resume
  */
 static struct spi_driver epd_driver = {
 	.driver = {
 		.name = "epd",
+		.of_match_table = of_match_ptr(epd_dt_ids),
 		.owner = THIS_MODULE,
 	},
 	.probe = epd_probe,
