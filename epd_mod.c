@@ -4,7 +4,10 @@
 #include <linux/i2c.h>
 #include <linux/gpio.h>
 #include <linux/of.h>
+#include <linux/of_device.h>
+#include <linux/of_gpio.h>
 
+#include "epd_mod.h"
 #include "epd_therm.h"
 
 #ifdef DEBUG
@@ -24,7 +27,75 @@ struct epd {
 	struct spi_device *spi;
 	struct i2c_client *therm;
 	struct pwm_device *pwm;
+	int gpio_panel_on;
+	int gpio_reset;
+	int gpio_border;
+	int gpio_busy;
+	int gpio_discharge;
 };
+
+static void epd_destroy(struct epd *epd)
+{
+	if(epd)
+		kfree(epd);
+}
+
+static int epd_prepare_gpios(struct epd *epd)
+{
+	int ret = -EINVAL;
+
+	if(!gpio_is_valid(epd->gpio_panel_on))
+		goto out;
+	gpio_direction_output(epd->gpio_panel_on, 1);
+
+	if(!gpio_is_valid(epd->gpio_reset))
+		goto out;
+	gpio_direction_output(epd->gpio_reset, 1);
+
+	if(!gpio_is_valid(epd->gpio_border))
+		goto out;
+	gpio_direction_output(epd->gpio_border, 1);
+
+	if(!gpio_is_valid(epd->gpio_busy))
+		goto out;
+	gpio_direction_input(epd->gpio_busy);
+
+	if(!gpio_is_valid(epd->gpio_discharge))
+		goto out;
+	gpio_direction_output(epd->gpio_discharge, 1);
+
+	ret = 0;
+out:
+	return ret;
+}
+
+static struct epd *epd_create(struct epd_platform_data *pdata)
+{
+	struct epd *epd;
+	int err;
+
+	/**
+	 * TODO: use devmanagement devm_kzalloc()
+	 */
+	epd = kzalloc(sizeof(*epd), GFP_KERNEL);
+	if(epd == NULL)
+		goto out;
+
+	epd->gpio_panel_on = pdata->gpio_panel_on;
+	epd->gpio_reset = pdata->gpio_reset;
+	epd->gpio_border = pdata->gpio_border;
+	epd->gpio_busy = pdata->gpio_busy;
+	epd->gpio_discharge = pdata->gpio_discharge;
+
+	err = epd_prepare_gpios(epd);
+	if(err < 0) {
+		kfree(epd);
+		return NULL;
+	}
+
+out:
+	return epd;
+}
 
 static int init_pwm(struct epd *epd)
 {
@@ -324,20 +395,120 @@ static void cleanup_thermal(struct epd *epd)
 	i2c_put_adapter(epd->therm->adapter);
 }
 
+#ifdef CONFIG_OF
+static const struct of_device_id epd_dt_ids[] = {
+	{
+		.compatible = "epd",
+	},
+	{},
+};
+MODULE_DEVICE_TABLE(of, epd_dt_ids);
+
+static int probe_dt(struct device *dev, struct epd_platform_data *pdata)
+{
+	struct device_node *node = dev->of_node;
+	struct of_device_id const *match;
+	int ret = 0;
+
+	/*
+	 * Check device tree node is ok
+	 */
+	if(node == NULL) {
+		ERR("Device does not have associated device tree data\n");
+		ret = -EINVAL;
+		goto out;
+	}
+	match = of_match_device(epd_dt_ids, dev);
+	if(match == NULL) {
+		ERR("Unknown device model\n");
+		ret = -EINVAL;
+		goto out;
+	}
+
+	/*
+	 * Get gpio for panel_on
+	 */
+	pdata->gpio_panel_on = of_get_named_gpio(node, "panel_on-gpios", 0);
+	if(pdata->gpio_panel_on < 0) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	/*
+	 * Get gpio for /reset
+	 */
+	pdata->gpio_reset = of_get_named_gpio(node, "reset-gpios", 0);
+	if(pdata->gpio_reset < 0) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	/*
+	 * Get gpio for border
+	 */
+	pdata->gpio_border = of_get_named_gpio(node, "border-gpios", 0);
+	if(pdata->gpio_border < 0) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	/*
+	 * Get gpio for busy
+	 */
+	pdata->gpio_busy = of_get_named_gpio(node, "busy-gpios", 0);
+	if(pdata->gpio_busy < 0) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	/*
+	 * Get gpio for External Discharge
+	 */
+	pdata->gpio_discharge = of_get_named_gpio(node, "discharge-gpios", 0);
+	if(pdata->gpio_discharge < 0) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+out:
+	return ret;
+}
+#else
+static int probe_dt(struct device *dev, struct epd_platform_data *pdata)
+{
+	return -EINVAL;
+}
+#endif
+
 static int epd_probe(struct spi_device *spi)
 {
 	struct epd *epd;
+	struct epd_platform_data *pdata, data;
 	int ret = 0;
 	int temp;
 
 	DBG("Call epd_probe()\n");
 
-	/**
-	 * TODO: use devmanagement devm_kzalloc()
+	/*
+	 * Get platform data in order to get all gpios config for border,
+	 * /reset, ....
+	 * This can be fetched from dt
 	 */
-	epd = kzalloc(sizeof(*epd), GFP_KERNEL);
-	if(epd == NULL)
-		return -ENOMEM;
+	pdata = dev_get_platdata(&spi->dev);
+	if(!pdata) {
+		pdata = &data;
+		ret = probe_dt(&spi->dev, pdata);
+		if(ret < 0) {
+			ERR("Fail to get platform data\n");
+			goto out;
+		}
+	}
+
+	epd = epd_create(pdata);
+	if(epd == NULL) {
+		ret = -ENOMEM;
+		goto out;
+	}
 
 	ret = spi_setup(spi);
 	if(ret < 0) {
@@ -366,7 +537,8 @@ static int epd_probe(struct spi_device *spi)
 
 fail:
 	cleanup_thermal(epd);
-	kfree(epd);
+	epd_destroy(epd);
+out:
 	return ret;
 }
 
@@ -377,21 +549,10 @@ static int epd_remove(struct spi_device *spi)
 
 	cleanup_pwm(epd);
 	cleanup_thermal(epd);
-	if(epd)
-		kfree(epd);
+	epd_destroy(epd);
 
 	return 0;
 }
-
-#ifdef CONFIG_OF
-static const struct of_device_id epd_dt_ids[] = {
-	{
-		.compatible = "epd",
-	},
-	{},
-};
-MODULE_DEVICE_TABLE(of, epd_dt_ids);
-#endif
 
 /**
  * TODO support pm suspend/resume

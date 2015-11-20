@@ -1,7 +1,7 @@
 SRC_EPD := epd_mod.c
 SRC_EPD_THERM := epd_therm_i2c.c
 SRC := $(SRC_EPD_THERM) $(SRC_EPD)
-INC := epd_therm.h
+INC := epd_mod.h epd_therm.h
 DTOVERLAY := rpi/rpi-epd-overlay.dts
 
 BUILDDIR := build
