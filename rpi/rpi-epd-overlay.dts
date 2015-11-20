@@ -1,0 +1,66 @@
+/*
+ * Device Tree overlay for epd module for raspberry-pi
+ */
+
+/dts-v1/;
+/plugin/; /* allow undefined label references */
+
+/ {
+	compatible = "brcm,bcm2835", "bcrm,bcm2708";
+
+	/* enable pwm */
+	fragment@0 {
+		target = <&soc>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			pwm: pwm@7e20c000 {
+				compatible = "brcm,bcm2835-pwm";
+				reg = <0x7e20c000 0x28>;
+				clocks = <&clk_pwm>;
+				#pwm-cells = <2>;
+				status = "okay";
+				pinctrl-names = "default";
+				pinctrl-0 = <&gpiopwm>;
+			};
+		};
+	};
+
+	/* configure pwm gpios */
+	fragment@1 {
+		target = <&gpio>;
+		__overlay__ {
+			gpiopwm: pwm {
+				brcm,pins = <18>;
+				brcm,function = <2>;
+			};
+		};
+	};
+
+	/* disable spidev and add enalbe epd driver */
+	fragment@2 {
+		target = <&spi0>;
+		__overlay__ {
+			status = "okay";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			spidev@0 {
+				status = "disabled";
+			};
+			epd@0{
+				compatible = "epd";
+				reg = <0>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				spi-max-frequency = <12000000>;
+				status = "okay";
+				pwms = <&pwm  0 5000000>;
+				panel_on-gpio = <&gpio 22 0>;
+				reset-gpio = <&gpio 24 0>;
+				border-gpio = <&gpio 14 0>;
+				busy-gpio = <&gpio 17 0>;
+				discharge-gpio = <&gpio 23 0>;
+			};
+		};
+	};
+};
