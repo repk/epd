@@ -3,6 +3,7 @@
 #include <linux/spi/spi.h>
 #include <linux/i2c.h>
 #include <linux/gpio.h>
+#include <linux/delay.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/of_gpio.h>
@@ -359,6 +360,33 @@ static int spi_send_data(struct spi_device *spi, unsigned int gpio_busy,
 			cpu_relax();
 	}
 
+	return ret;
+}
+
+static int power_on(struct epd *epd)
+{
+	int ret;
+
+	/* XXX Maybe reset all gpio here */
+
+	ret = pwm_enable(epd->pwm);
+	if(ret < 0) {
+		goto out;
+	}
+
+	gpio_set_value(epd->gpio_panel_on, 1);
+	mdelay(10);
+
+	/* TODO /CS is already set to 1 */
+
+	gpio_set_value(epd->gpio_border, 1);
+	gpio_set_value(epd->gpio_reset, 1);
+	mdelay(5);
+	gpio_set_value(epd->gpio_reset, 0);
+	mdelay(5);
+	gpio_set_value(epd->gpio_reset, 1);
+	mdelay(5);
+out:
 	return ret;
 }
 
