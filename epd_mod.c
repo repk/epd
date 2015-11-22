@@ -390,6 +390,70 @@ out:
 	return ret;
 }
 
+static int init_display(struct epd *epd)
+{
+	int ret = 0;
+
+	while(gpio_get_value(epd->gpio_busy))
+		cpu_relax();
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_CHANSEL_2_7);
+	if(ret < 0)
+		goto out;
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_DCFREQ);
+	if(ret < 0)
+		goto out;
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_OSC_ON);
+	if(ret < 0)
+		goto out;
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_ADC_DISABLE);
+	if(ret < 0)
+		goto out;
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_VCOM_LVL);
+	if(ret < 0)
+		goto out;
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_GATE_SRC_LVL_2_7);
+	if(ret < 0)
+		goto out;
+	mdelay(5);
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_LATCH_ON);
+	if(ret < 0)
+		goto out;
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_LATCH_OFF);
+	if(ret < 0)
+		goto out;
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_CHARGEPUMP_VPOS_ON);
+	if(ret < 0)
+		goto out;
+	mdelay(30);
+
+	pwm_disable(epd->pwm);
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_CHARGEPUMP_VNEG_ON);
+	if(ret < 0)
+		goto out;
+	mdelay(30);
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_CHARGEPUMP_VCOM_ON);
+	if(ret < 0)
+		goto out;
+	mdelay(30);
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_OUTPUT_DISABLE);
+	if(ret < 0)
+		goto out;
+out:
+	return ret;
+}
+
 static int setup_thermal(struct epd *epd)
 {
 	struct i2c_adapter *adapt;
