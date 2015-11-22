@@ -24,10 +24,51 @@
 #define PWM_DUTY_PERCENT 50
 #define PWM_DUTY (PWM_PERIOD * PWM_DUTY_PERCENT / 100)
 
+struct epd_frame {
+	size_t nrline;
+	size_t nrdot;
+	unsigned int bytes_per_line;
+	u8 data[];
+};
+#define EPD_DOT_NRBIT 2
+#define EPD_DOT_PER_BYTE (8 / EPD_DOT_NRBIT)
+#define EPD_DOT_B 3
+#define EPD_DOT_W 2
+#define EPD_DOT_N 1
+#define EPD_SCAN_NRBIT 2
+#define EPD_SCAN_PER_BYTE (8 / EPD_SCAN_NRBIT)
+#define EPD_SCAN_OFF 0
+#define EPD_SCAN_ON 3
+#define EPD_DUMMY_LINE ((size_t)(-1))
+
+struct epd_frame_size {
+	size_t line;
+	size_t col;
+};
+
+static struct epd_frame_size const epd_frame_info[] = {
+	[EPD_TYPE_1_44] = {
+		.line = 96,
+		.col = 128,
+	},
+	[EPD_TYPE_2] = {
+		.line = 96,
+		.col = 200,
+	},
+	[EPD_TYPE_2_7] = {
+		.line = 176,
+		.col = 264,
+	},
+};
+
 struct epd {
+	struct epd_frame *fold;
+	struct epd_frame *fnew;
 	struct spi_device *spi;
 	struct i2c_client *therm;
 	struct pwm_device *pwm;
+	enum epd_type type;
+	unsigned long stage_time;
 	int gpio_panel_on;
 	int gpio_reset;
 	int gpio_border;
@@ -35,10 +76,54 @@ struct epd {
 	int gpio_discharge;
 };
 
+static void epd_frame_cleanup(struct epd_frame *frame)
+{
+	if(frame)
+		kfree(frame);
+}
+
+static struct epd_frame *epd_frame_create(size_t line, size_t col)
+{
+	struct epd_frame *f;
+	unsigned int bytes_per_line = DIV_ROUND_UP(col, 8);
+
+	f = kmalloc(sizeof(*f) + line * bytes_per_line, GFP_KERNEL);
+	if(f == NULL)
+		return NULL;
+
+	f->nrline = line;
+	f->nrdot = col;
+	f->bytes_per_line = bytes_per_line;
+
+	return f;
+}
+
+static void epd_frame_black(struct epd_frame *frame)
+{
+	size_t i, j;
+
+	for(i = 0; i < frame->nrline; ++i)
+		for(j = 0; j < frame->bytes_per_line; ++j)
+			frame->data[i * frame->bytes_per_line + j] = 0xff;
+}
+
+static void epd_frame_white(struct epd_frame *frame)
+{
+	size_t i, j;
+
+	for(i = 0; i < frame->nrline; ++i)
+		for(j = 0; j < frame->bytes_per_line; ++j)
+			frame->data[i * frame->bytes_per_line + j] = 0x00;
+}
+
 static void epd_destroy(struct epd *epd)
 {
-	if(epd)
-		kfree(epd);
+	if(epd == NULL)
+		return;
+
+	epd_frame_cleanup(epd->fold);
+	epd_frame_cleanup(epd->fnew);
+	kfree(epd);
 }
 
 static int epd_prepare_gpios(struct epd *epd)
@@ -72,15 +157,26 @@ out:
 
 static struct epd *epd_create(struct epd_platform_data *pdata)
 {
-	struct epd *epd;
+	struct epd *epd = NULL;
+	struct epd_frame_size const *framesz;
 	int err;
 
 	/**
 	 * TODO: use devmanagement devm_kzalloc()
 	 */
 	epd = kzalloc(sizeof(*epd), GFP_KERNEL);
-	if(epd == NULL)
-		goto out;
+	if(epd == NULL) {
+		err = -ENOMEM;
+		goto fail;
+	}
+
+	if(pdata->type > EPD_TYPE_MAX) {
+		err = -EINVAL;
+		goto fail;
+	}
+
+	epd->type = pdata->type;
+	framesz = &epd_frame_info[epd->type];
 
 	epd->gpio_panel_on = pdata->gpio_panel_on;
 	epd->gpio_reset = pdata->gpio_reset;
@@ -89,13 +185,77 @@ static struct epd *epd_create(struct epd_platform_data *pdata)
 	epd->gpio_discharge = pdata->gpio_discharge;
 
 	err = epd_prepare_gpios(epd);
-	if(err < 0) {
-		kfree(epd);
-		return NULL;
+	if(err < 0)
+		goto fail;
+
+	epd->fold = epd_frame_create(framesz->line, framesz->col);
+	if(epd->fold == NULL) {
+		err = -ENOMEM;
+		goto fail;
 	}
 
-out:
+	epd->fnew = epd_frame_create(framesz->line, framesz->col);
+	if(epd->fnew == NULL) {
+		err = -ENOMEM;
+		goto fail;
+	}
+
+	epd_frame_black(epd->fold);
+	epd_frame_white(epd->fnew);
+
 	return epd;
+
+fail:
+	epd_destroy(epd);
+
+	return ERR_PTR(err);
+}
+
+static void epd_update_frame(struct epd *epd)
+{
+	struct epd_frame *f = epd->fold;
+
+	epd->fold = epd->fnew;
+	epd->fnew = f;
+	/* update new buffer for read() to be ok */
+	memcpy(epd->fnew->data, epd->fold->data,
+			epd->fnew->nrline * epd->fnew->bytes_per_line);
+}
+
+static void epd_compute_stage_time(struct epd *epd)
+{
+	unsigned long stage_time = 0;
+	int temp;
+
+	switch(epd->type) {
+	case EPD_TYPE_1_44:
+	case EPD_TYPE_2:
+		stage_time = 480;
+		break;
+	case EPD_TYPE_2_7:
+		stage_time = 630;
+		break;
+	}
+
+	temp = epd_therm_get_temp(epd->therm);
+	if(temp <= -10000)
+		stage_time *= 170;
+	else if(temp <= -5000)
+		stage_time *= 120;
+	else if(temp <= 5000)
+		stage_time *= 80;
+	else if(temp <= 10000)
+		stage_time *= 40;
+	else if(temp <= 15000)
+		stage_time *= 30;
+	else if(temp <= 20000)
+		stage_time *= 20;
+	else if(temp <= 40000)
+		stage_time *= 10;
+	else
+		stage_time *= 7;
+
+	epd->stage_time = DIV_ROUND_UP(stage_time, 10);
 }
 
 static int init_pwm(struct epd *epd)
@@ -316,7 +476,7 @@ static int spi_send_cmd(struct spi_device *spi, enum spi_cmd_id cid)
 }
 
 static int spi_send_data(struct spi_device *spi, unsigned int gpio_busy,
-		char const *data, size_t len)
+		u8 const *data, size_t len)
 {
 	static char _spi_reg_hdr[] = {SPI_REG_HEADER};
 	static char _spi_data_hdr[] = {SPI_DATA_HEADER};
@@ -360,6 +520,218 @@ static int spi_send_data(struct spi_device *spi, unsigned int gpio_busy,
 			cpu_relax();
 	}
 
+	return ret;
+}
+
+enum epd_stage {
+	EPD_STAGE_COMPENSATE,
+	EPD_STAGE_WHITE,
+	EPD_STAGE_INVERSE,
+	EPD_STAGE_NORMAL,
+	EPD_STAGE_POWEROFF,
+};
+
+#define EPD_ODD_BYTE(dot) (dot)
+#define EPD_EVEN_BYTE(dot)						\
+	(((((dot) >> 6) & 0x3) << 0) |					\
+	 ((((dot) >> 4) & 0x3) << 2) |					\
+	 ((((dot) >> 2) & 0x3) << 4) |					\
+	 ((((dot) >> 0) & 0x3) << 6))
+
+static int fill_line(struct epd_frame *frame, enum epd_stage stage,
+		size_t line, u8 *data, size_t len)
+{
+	u8 *ptr, *end;
+	size_t lbyte, dotnr, scannr, i;
+	int ret = 0;
+	u8 dot = 0;
+
+	dotnr = frame->nrdot / EPD_DOT_PER_BYTE;
+	scannr = frame->nrline / EPD_SCAN_PER_BYTE;
+	lbyte = frame->bytes_per_line;
+
+	/*
+	 * Some length checking
+	 */
+	if((len < dotnr + scannr) || (dotnr != 2 * lbyte)) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	ptr = data;
+	end = data + len;
+
+	/* odd dots (263, ..., 3, 1) */
+	for(i = lbyte; i > 0; --i, ++ptr) {
+		if(line != EPD_DUMMY_LINE)
+			dot = frame->data[line * lbyte + i - 1] & 0xaa;
+		switch(stage) {
+		case EPD_STAGE_COMPENSATE:
+			*ptr = EPD_ODD_BYTE(~(dot >> 1));
+			break;
+		case EPD_STAGE_WHITE:
+			*ptr = EPD_ODD_BYTE(dot ^ 0xaa);
+			break;
+		case EPD_STAGE_INVERSE:
+			*ptr = EPD_ODD_BYTE(~dot);
+			break;
+		case EPD_STAGE_NORMAL:
+			*ptr = EPD_ODD_BYTE((dot >> 1) | 0xaa);
+			break;
+		case EPD_STAGE_POWEROFF:
+			*ptr = 0x55;
+			break;
+		}
+	}
+
+	/* Scan line */
+	for(i = 0; i < scannr; ++i, ++ptr) {
+		if(i == line / EPD_SCAN_PER_BYTE) {
+			*ptr = 0xc0 >> (EPD_SCAN_NRBIT *
+					(line % EPD_SCAN_PER_BYTE));
+		} else {
+			*ptr = EPD_SCAN_OFF;
+		}
+	}
+
+	/* even dots (0, 2, ..., 262) */
+	for(i = 0; i < lbyte; ++i, ++ptr) {
+		if(line != EPD_DUMMY_LINE)
+			dot = frame->data[line * lbyte + i] & 0x55;
+		switch(stage) {
+		case EPD_STAGE_COMPENSATE:
+			*ptr = EPD_EVEN_BYTE(~dot);
+			break;
+		case EPD_STAGE_WHITE:
+			*ptr = EPD_EVEN_BYTE((dot ^ 0x55) << 1);
+			break;
+		case EPD_STAGE_INVERSE:
+			*ptr = EPD_EVEN_BYTE((dot + 0x55) ^ 0xaa);
+			break;
+		case EPD_STAGE_NORMAL:
+			*ptr = EPD_EVEN_BYTE(dot | 0xaa);
+			break;
+		case EPD_STAGE_POWEROFF:
+			*ptr = 0x55;
+			break;
+		}
+	}
+
+	/* filler */
+	while(ptr < end)
+		*ptr++ = 0;
+
+out:
+	return ret;
+}
+
+static int draw_line(struct epd *epd, enum epd_stage stage, size_t line)
+{
+	struct epd_frame *f;
+	struct epd_frame_size const *fsz;
+	u8 *data = NULL;
+	size_t dotnr, scannr;
+	int ret, filler = 0;
+
+	DBG("Send line %zu\n", line);
+
+	switch(epd->type) {
+	case EPD_TYPE_1_44:
+		filler = 0;
+		ret = spi_send_cmd(epd->spi, SPI_CMD_GATE_SRC_LVL_1_44);
+		if(ret < 0)
+			goto out;
+		break;
+	case EPD_TYPE_2:
+		filler = 1;
+		ret = spi_send_cmd(epd->spi, SPI_CMD_GATE_SRC_LVL_2);
+		if(ret < 0)
+			goto out;
+		break;
+	case EPD_TYPE_2_7:
+		filler = 1;
+		ret = spi_send_cmd(epd->spi, SPI_CMD_GATE_SRC_LVL_2_7);
+		if(ret < 0)
+			goto out;
+		break;
+	}
+
+	if(stage == EPD_STAGE_COMPENSATE || stage == EPD_STAGE_WHITE)
+		f = epd->fold;
+	else
+		f = epd->fnew;
+
+	fsz = &epd_frame_info[epd->type];
+	dotnr = fsz->col / EPD_DOT_PER_BYTE;
+	scannr = fsz->line / EPD_SCAN_PER_BYTE;
+
+	data = kmalloc(dotnr + scannr + filler, GFP_KERNEL);
+	if(data == NULL) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	ret = fill_line(f, stage, line, data, dotnr + scannr + filler);
+	if(ret)
+		goto out;
+
+	ret = spi_send_data(epd->spi, epd->gpio_busy, data,
+			dotnr + scannr + filler);
+	if(ret)
+		goto out;
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_OUTPUT_ENABLE);
+
+out:
+	if(data)
+		kfree(data);
+
+	return ret;
+}
+
+static int poweroff_stage(struct epd *epd)
+{
+	size_t i;
+	int ret = 0;
+
+	for(i = 0; i < epd_frame_info[epd->type].line; ++i) {
+		ret = draw_line(epd, EPD_STAGE_POWEROFF, i);
+		if(ret < 0)
+			goto out;
+	}
+
+	ret = draw_line(epd, EPD_STAGE_POWEROFF, EPD_DUMMY_LINE);
+out:
+	return ret;
+}
+
+static int draw_stage(struct epd *epd, enum epd_stage stage)
+{
+	size_t i;
+	int ret = 0;
+
+	for(i = 0; i < epd_frame_info[epd->type].line; ++i) {
+		ret = draw_line(epd, stage, i);
+		if(ret < 0)
+			goto out;
+	}
+out:
+	return ret;
+}
+
+static int repeat_stage(struct epd *epd, enum epd_stage stage)
+{
+	unsigned long timeout;
+	int ret;
+
+	timeout = jiffies + msecs_to_jiffies(epd->stage_time);
+	do {
+		ret = draw_stage(epd, stage);
+		if(ret < 0)
+			goto out;
+	} while(time_before(jiffies, timeout));
+
+out:
 	return ret;
 }
 
@@ -454,6 +826,49 @@ out:
 	return ret;
 }
 
+static int epd_draw_frame(struct epd *epd)
+{
+	int ret;
+
+	DBG("Power on display\n");
+	ret = power_on(epd);
+	if(ret < 0)
+		goto out;
+
+	DBG("Init display\n");
+	ret = init_display(epd);
+	if(ret < 0)
+		goto out;
+
+	epd_compute_stage_time(epd);
+	DBG("Stage time : %lu\n", epd->stage_time);
+
+	DBG("Draw compensate stage\n");
+	ret = repeat_stage(epd, EPD_STAGE_COMPENSATE);
+	if(ret < 0)
+		goto out;
+
+	DBG("Draw white stage\n");
+	ret = repeat_stage(epd, EPD_STAGE_WHITE);
+	if(ret < 0)
+		goto out;
+
+	DBG("Draw inverse stage\n");
+	ret = repeat_stage(epd, EPD_STAGE_INVERSE);
+	if(ret < 0)
+		goto out;
+
+	DBG("Draw normal stage\n");
+	ret = repeat_stage(epd, EPD_STAGE_NORMAL);
+	if(ret < 0)
+		goto out;
+
+	epd_update_frame(epd);
+
+out:
+	return ret;
+}
+
 static int setup_thermal(struct epd *epd)
 {
 	struct i2c_adapter *adapt;
@@ -518,6 +933,11 @@ static int probe_dt(struct device *dev, struct epd_platform_data *pdata)
 	}
 
 	/*
+	 * TODO Get type from DT
+	 */
+	pdata->type = EPD_TYPE_2_7;
+
+	/*
 	 * Get gpio for panel_on
 	 */
 	pdata->gpio_panel_on = of_get_named_gpio(node, "panel_on-gpios", 0);
@@ -577,7 +997,6 @@ static int epd_probe(struct spi_device *spi)
 	struct epd *epd;
 	struct epd_platform_data *pdata, data;
 	int ret = 0;
-	int temp;
 
 	DBG("Call epd_probe()\n");
 
@@ -597,8 +1016,8 @@ static int epd_probe(struct spi_device *spi)
 	}
 
 	epd = epd_create(pdata);
-	if(epd == NULL) {
-		ret = -ENOMEM;
+	if(IS_ERR(epd)) {
+		ret = PTR_ERR(epd);
 		goto out;
 	}
 
@@ -619,11 +1038,8 @@ static int epd_probe(struct spi_device *spi)
 	if(ret < 0)
 		goto fail;
 
-	/**
-	 * TODO Remove all below
-	 */
-	temp = epd_therm_get_temp(epd->therm);
-	printk("Temp is %d\n", temp);
+	/* Clear the screen */
+	epd_draw_frame(epd);
 
 	return 0;
 
