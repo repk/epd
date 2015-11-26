@@ -762,6 +762,72 @@ out:
 	return ret;
 }
 
+static int power_off(struct epd *epd)
+{
+	int ret;
+
+	ret = poweroff_stage(epd);
+	if(ret < 0)
+		goto out;
+
+	mdelay(25);
+	gpio_set_value(epd->gpio_border, 0);
+	mdelay(250);
+	gpio_set_value(epd->gpio_border, 1);
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_LATCH_ON);
+	if(ret < 0)
+		goto out;
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_OUTPUT_OFF);
+	if(ret < 0)
+		goto out;
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_CHARGEPUMP_VCOM_OFF);
+	if(ret < 0)
+		goto out;
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_CHARGEPUMP_VNEG_OFF);
+	if(ret < 0)
+		goto out;
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_GATE_SRC_LVL_DISCHARGE_1);
+	if(ret < 0)
+		goto out;
+	mdelay(120);
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_CHARGEPUMP_VPOS_OFF);
+	if(ret < 0)
+		goto out;
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_OSC_OFF);
+	if(ret < 0)
+		goto out;
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_GATE_SRC_LVL_DISCHARGE_2);
+	if(ret < 0)
+		goto out;
+	mdelay(40);
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_GATE_SRC_LVL_DISCHARGE_3);
+	if(ret < 0)
+		goto out;
+	mdelay(40);
+
+	ret = spi_send_cmd(epd->spi, SPI_CMD_GATE_SRC_LVL_DISCHARGE_0);
+	if(ret < 0)
+		goto out;
+
+	gpio_set_value(epd->gpio_border, 0);
+	gpio_set_value(epd->gpio_reset, 0);
+	gpio_set_value(epd->gpio_panel_on, 0);
+	gpio_set_value(epd->gpio_discharge, 1);
+	mdelay(150);
+	gpio_set_value(epd->gpio_discharge, 0);
+out:
+	return ret;
+}
+
 static int init_display(struct epd *epd)
 {
 	int ret = 0;
@@ -865,6 +931,8 @@ static int epd_draw_frame(struct epd *epd)
 
 	epd_update_frame(epd);
 
+	DBG("Power off display\n");
+	ret = power_off(epd);
 out:
 	return ret;
 }
