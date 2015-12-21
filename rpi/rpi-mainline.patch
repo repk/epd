@@ -1,0 +1,73 @@
+diff --git a/arch/arm/boot/dts/bcm2835-rpi-b.dts b/arch/arm/boot/dts/bcm2835-rpi-b.dts
+index ff6b2d1..478aa79 100644
+--- a/arch/arm/boot/dts/bcm2835-rpi-b.dts
++++ b/arch/arm/boot/dts/bcm2835-rpi-b.dts
+@@ -13,5 +13,10 @@
+ };
+ 
+ &gpio {
+-	pinctrl-0 = <&gpioout &alt0 &alt3>;
++	pinctrl-0 = <&gpioout &alt0 &alt3 &gpiopwm>;
++
++	gpiopwm: pwm {
++		brcm,pins = <18>;
++		brcm,function = <BCM2835_FSEL_ALT5>;
++	};
+ };
+diff --git a/arch/arm/boot/dts/bcm2835.dtsi b/arch/arm/boot/dts/bcm2835.dtsi
+index fe8d17c..85533b1 100644
+--- a/arch/arm/boot/dts/bcm2835.dtsi
++++ b/arch/arm/boot/dts/bcm2835.dtsi
+@@ -136,7 +136,21 @@
+ 			clocks = <&clocks BCM2835_CLOCK_VPU>;
+ 			#address-cells = <1>;
+ 			#size-cells = <0>;
+-			status = "disabled";
++			status = "okay";
++			epd@0{
++				compatible = "epd";
++				reg = <0>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				spi-max-frequency = <12000000>;
++				status = "okay";
++				pwms = <&pwm  0 5000000>;
++                                panel_on-gpios = <&gpio 22 0>;
++                                reset-gpios = <&gpio 24 0>;
++                                border-gpios = <&gpio 25 0>;
++                                busy-gpios = <&gpio 17 0>;
++                                discharge-gpios = <&gpio 23 0>;
++			};
+ 		};
+ 
+ 		i2c0: i2c@7e205000 {
+@@ -154,9 +168,9 @@
+ 			reg = <0x7e20c000 0x28>;
+ 			clocks = <&clocks BCM2835_CLOCK_PWM>;
+ 			assigned-clocks = <&clocks BCM2835_CLOCK_PWM>;
+-			assigned-clock-rates = <10000000>;
++			assigned-clock-rates = <9200000>;
+ 			#pwm-cells = <2>;
+-			status = "disabled";
++			status = "okay";
+ 		};
+ 
+ 		sdhci: sdhci@7e300000 {
+@@ -174,7 +188,7 @@
+ 			clocks = <&clocks BCM2835_CLOCK_VPU>;
+ 			#address-cells = <1>;
+ 			#size-cells = <0>;
+-			status = "disabled";
++			status = "okay";
+ 		};
+ 
+ 		i2c2: i2c@7e805000 {
+@@ -184,7 +198,7 @@
+ 			clocks = <&clocks BCM2835_CLOCK_VPU>;
+ 			#address-cells = <1>;
+ 			#size-cells = <0>;
+-			status = "disabled";
++			status = "okay";
+ 		};
+ 
+ 		usb@7e980000 {
