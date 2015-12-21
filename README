@@ -1,0 +1,78 @@
+EPD
+===
+
+EPD is a linux driver for EM027AS012 based epaper display. A EM027AS013
+based devices support could possibly be added later on.
+
+Build
+-----
+Simply run "make" if compiling module on the target.
+
+If you want to cross compile the module you can use:
+make ARCH=<arch> CROSS_COMPILE=<cross_tuple> KERNDIR=<kernel_dir>
+
+Where arch is the architecture of the target (e.g. arm) cross_tuple is the cross
+compiler prefix (e.g. arm-unknow-linux-gnueabi-) and kernel_dir a path to the
+kernel compiled for the target.
+
+To have debug printks you can run make with "DEBUG=1". /!\ This is very verbose
+for frame update.
+
+Use it
+------
+Two modules are created in build/epd/. epd_therm.ko which handles on board i2c
+temperature sensor and epd.ko which handles the display.
+
+First load the platform spi, pwm and i2c drivers. Then epd_therm.ko ("insmod
+epd_therm.ko") and finally load the epd.ko driver.
+
+If everything went well, two char devices node has been created in /dev
+(usually /dev/epdctl and /dev/epd0).
+
+- /dev/epd0:
+This is the epaper display framebuffer, it olds the image to be displayed for
+screen id 0. When updating frame, write a xbm binary formatted image in it.
+
+- /dev/epdctl:
+This is the epaper controling file. It understands the following commands:
+	- 'C<id>': clears the screen with id <id> into a blank one
+	- 'B<id>': makes the screen with id <id> all black
+	- 'W<id>': display the current image in framebuffer onto the screen with
+	  id <id>
+
+So basically updating a new image for first screen would need:
+1) "cat /tmp/image >> /dev/epd0"
+2) "echo -n "W0" >> /dev/epdctl"
+
+RaspberryPI
+-----------
+This driver has been tested on a RPI-B booting a vanilla/mainline kernel. The
+rpi device tree from this kernel has been modified to get this working. The
+patch found in rpi/rpi-mainline.patch can be used. Moreover the kernel needs
+the incoming pwm clock support that can be found in this patchset
+(https://lkml.org/lkml/2015/12/6/74).
+
+This driver can also work with a linux kernel from rpi tree. An devicetree
+overlay for this kernel can be built with "make rpi-devicetree". Then the
+following commands can be entered:
+
+modprobe spi-bcm2835
+modprobe i2c-bcm2708
+modprobe pwm-bcm2835
+insmod epd_therm.ko
+insmod epd.ko
+
+Quick test
+----------
+A quick test script can be found in test/epd-test.sh which can be used as
+below:
+./epd-test.sh [-c | -b | -w <image.xbm>]
+
+	- "./epd-test.sh -c" cleans the screen into a blank one
+	- "./epd-test.sh -b" cleans the screen into a full black one
+	- "./epd-test.sh -w <image.xbm>" displays the ascii xbm formatted image
+	  found in <image.xbm> (you can use something like gimp to generate such
+	  images)
+
+This script uses xxd, which comes with vim, in order to transform xbm ascii
+images into xbm binary format.
