@@ -1,0 +1,35 @@
+TODO list (not in order)
+========================
+
+	- Use dev managment resources allocation such as devm_kzalloc()
+
+	- Support multiple screens by updating epddev into a linked list indexed
+	  by the screen id (device minor number)
+
+	- Get more info from platform data (EPD type, pwm channel id)
+
+	- Try to speed up frame drawing
+
+	- Is it better to have two char devices (one for control and one for
+	  data). Or should I use ioctl()
+		- ioctl pro :
+			- Does not need to mux char driver based on minor
+			  number
+			- Are the standard in linux kernel
+		- ioctl cons :
+			- Need a .h to be exported
+			- Cannot be used in shell script as-is
+			- Cannot be used through network
+
+	- Support pm suspend/resume
+
+	- Support EM027AS013. Maybe by making epd_mod a generic epd framework
+	  that abstracts EM027AS012/EM027AS013.
+
+	- Fix modstub-test to compile and detect memory leak with device_create,
+	  cdev_add, class_create, ...
+
+	- Export spi commands specific code into a different file
+
+	- Separate epd_mod in two driver, one for controller (epdctl) and one
+	  for the screen (epd<id>)
