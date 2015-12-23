@@ -1,0 +1,3 @@
+build/*
+*.o
+modstub-test/epd_test
