@@ -1,12 +1,14 @@
-SRC_EPD := epd_mod.c
+SRC_EPD := core.c
+SRC_G1 := epd_g1.c
 SRC_EPD_THERM := epd_therm_i2c.c
-SRC := $(SRC_EPD_THERM) $(SRC_EPD)
-INC := epd_mod.h epd_therm.h
+SRC := $(SRC_EPD_THERM) $(SRC_EPD) $(SRC_G1)
+INC := epd.h epd_therm.h epd_g1.h
 DTOVERLAY := rpi/rpi-epd-overlay.dts
 
 BUILDDIR := build
 KBUILD := $(BUILDDIR)/epd
 KOBJ_EPD := $(SRC_EPD:%.c=%.o)
+KOBJ_G1 := $(SRC_G1:%.c=%.o)
 KOBJ_EPD_THERM := $(SRC_EPD_THERM:%.c=%.o)
 KOBJ := $(SRC:%.c=%.o)
 
@@ -18,9 +20,10 @@ endif
 # call's this one. So if KERNELRELEASE is defined we are at the second called to
 # this makefile
 ifneq ($(KERNELRELEASE),)
-	obj-m := epd.o epd_therm.o
+	obj-m := epd.o epd-g1.o epd-therm.o
 	epd-y := $(KOBJ_EPD)
-	epd_therm-y := $(KOBJ_EPD_THERM)
+	epd-g1-y := $(KOBJ_G1)
+	epd-therm-y := $(KOBJ_EPD_THERM)
 	ccflags-y := $(KFLAGS)
 # Here we are at the first call
 else

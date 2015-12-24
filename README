@@ -1,8 +1,16 @@
 EPD
 ===
 
-EPD is a linux driver for EM027AS012 based epaper display. A EM027AS013
-based devices support could possibly be added later on.
+EPD is a linux kernel subsystem for controlling epaper displays.
+
+For now, only Pervasive Display's COG G1 (based on EM027AS012) epaper display
+is supported. A COG G2 (based on EM027AS013) device support will certainly be
+added later on.
+
+This subsystem is separated in two parts, the epaper controller (core.c) and the
+epaper device drivers (e.g. epd_g1.c). The controller manages the userland
+interface and manipulates the registered device driver, but remain hardware
+agnostic.
 
 Build
 -----
@@ -20,13 +28,14 @@ for frame update.
 
 Use it
 ------
-Two modules are created in build/epd/. epd_therm.ko which handles on board i2c
-temperature sensor and epd.ko which handles the display.
+Two modules are created in build/epd/. epd-therm.ko which handles on board i2c
+temperature sensor, epd.ko is the epaper controller and epd-g1.ko is the COG
+G1 device driver.
 
-First load the platform spi, pwm and i2c drivers. Then epd_therm.ko ("insmod
-epd_therm.ko") and finally load the epd.ko driver.
+First load the platform spi, pwm and i2c drivers. Then the controller ("insmod
+epd.ko"), then epd-therm.ko and finally the screen device driver epd-g1.ko.
 
-If everything went well, two char devices node has been created in /dev
+If everything went well, two char device nodes has been created in /dev
 (usually /dev/epdctl and /dev/epd0).
 
 - /dev/epd0:
@@ -59,8 +68,9 @@ following commands can be entered:
 modprobe spi-bcm2835
 modprobe i2c-bcm2708
 modprobe pwm-bcm2835
-insmod epd_therm.ko
 insmod epd.ko
+insmod epd-therm.ko
+insmod epd-g1.ko
 
 Quick test
 ----------

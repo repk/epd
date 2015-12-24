@@ -48,7 +48,7 @@
 				status = "disabled";
 			};
 			epd@0{
-				compatible = "epd";
+				compatible = "prvdsp,g1-epd";
 				reg = <0>;
 				#address-cells = <1>;
 				#size-cells = <0>;

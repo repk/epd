@@ -25,28 +25,25 @@ index fe8d17c..85533b1 100644
 -			status = "disabled";
 +			status = "okay";
 +			epd@0{
-+				compatible = "epd";
++				compatible = "prvdsp,g1-epd";
 +				reg = <0>;
 +				#address-cells = <1>;
 +				#size-cells = <0>;
 +				spi-max-frequency = <12000000>;
 +				status = "okay";
 +				pwms = <&pwm  0 5000000>;
-+                                panel_on-gpios = <&gpio 22 0>;
-+                                reset-gpios = <&gpio 24 0>;
-+                                border-gpios = <&gpio 25 0>;
-+                                busy-gpios = <&gpio 17 0>;
-+                                discharge-gpios = <&gpio 23 0>;
++				panel_on-gpios = <&gpio 22 0>;
++				reset-gpios = <&gpio 24 0>;
++				border-gpios = <&gpio 25 0>;
++				busy-gpios = <&gpio 17 0>;
++				discharge-gpios = <&gpio 23 0>;
 +			};
  		};
  
  		i2c0: i2c@7e205000 {
-@@ -154,9 +168,9 @@
- 			reg = <0x7e20c000 0x28>;
- 			clocks = <&clocks BCM2835_CLOCK_PWM>;
+@@ -156,7 +170,7 @@
  			assigned-clocks = <&clocks BCM2835_CLOCK_PWM>;
--			assigned-clock-rates = <10000000>;
-+			assigned-clock-rates = <9200000>;
+			assigned-clock-rates = <10000000>;
  			#pwm-cells = <2>;
 -			status = "disabled";
 +			status = "okay";
