@@ -2,5 +2,6 @@
 #define _LINUX_STUB_EXPORT_H_
 
 #define THIS_MODULE ((struct module *)0)
+#define EXPORT_SYMBOL(sym)
 
 #endif

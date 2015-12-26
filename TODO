@@ -25,7 +25,4 @@ TODO list (not in order)
 
 	- Support Pervasive Display COG G2 (EM027AS013).
 
-	- Fix modstub-test to compile and detect memory leak with device_create,
-	  cdev_add, class_create, ...
-
 	- Export spi commands specific code into a different file

@@ -1,9 +1,21 @@
 #ifndef _LINUX_STUB_DEVICE_H_
 #define _LINUX_STUB_DEVICE_H_
 
+#include <linux/slab.h>
+#include <linux/types.h>
+#include <linux/kdev_t.h>
+
+struct class {
+	const char *name;
+	struct module *owner;
+};
+
 struct device {
-	void		*platform_data;
-	void		*driver_data;
+	struct list_head	next;
+	void			*platform_data;
+	void			*driver_data;
+	char const *name;
+	dev_t devt;
 };
 
 struct device_driver {
@@ -33,6 +45,28 @@ static inline void *dev_get_drvdata(const struct device *dev)
 static inline void dev_set_drvdata(struct device *dev, void *data)
 {
 	dev->driver_data = data;
+}
+
+struct device *device_create(struct class *class, struct device *parent,
+		dev_t devt, void *drvdata, const char *fmt, ...);
+
+void device_destroy(struct class *class, dev_t devt);
+
+static inline struct class *class_create(struct module *owner,
+		char const *name)
+{
+	struct class *c;
+
+	c = kmalloc(sizeof(*c), GFP_KERNEL);
+	c->name = name;
+	c->owner = owner;
+
+	return c;
+}
+
+static inline void class_destroy(struct class *c)
+{
+	kfree(c);
 }
 
 #endif

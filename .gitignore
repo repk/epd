@@ -1,3 +1,4 @@
 build/*
 *.o
 modstub-test/epd_test
+modstub-test/drv-*.c
