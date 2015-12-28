@@ -11,6 +11,7 @@
 #define __must_be_array(a) 0
 
 #define WRITE_ONCE(x, val) (x = val)
+#define READ_ONCE(x) (x)
 #define __user
 #define typeof __typeof__
 

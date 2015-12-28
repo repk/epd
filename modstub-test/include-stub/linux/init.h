@@ -4,8 +4,6 @@
 #define __init
 #define __exit
 
-#define FUNC_MAGIC ((void *)0x12121212)
-
 struct module_initcall {
 	char const *name;
 	int (*f)(void);
@@ -21,10 +19,8 @@ struct module_exitcall {
 		.name = #fn,						\
 		.f = fn,						\
 	};								\
-	struct module_initcall *__initcall_##fn_magic			\
-		__attribute__((__section__(".initcall"))) = FUNC_MAGIC;	\
-	struct module_initcall *__initcall_##fn_ptr			\
-		__attribute__((__section__(".initcall"))) = & __initcall_##fn
+	struct module_initcall *__initcall_func_##fn			\
+		__attribute__((__section__(".initcall"))) = &__initcall_##fn
 
 
 #define module_exit(fn)							\
@@ -32,10 +28,8 @@ struct module_exitcall {
 		.name = #fn,						\
 		.f = fn,						\
 	};								\
-	struct module_exitcall *__exitcall_##fn_magic			\
-		__attribute__((__section__(".exitcall"))) = FUNC_MAGIC;	\
-	struct module_exitcall *__exitcall_##fn_ptr			\
-		__attribute__((__section__(".exitcall"))) = & __exitcall_##fn
+	struct module_exitcall *__exitcall_func_##fn			\
+		__attribute__((__section__(".exitcall"))) = &__exitcall_##fn
 
 int devices_init(void);
 int devices_exit(void);

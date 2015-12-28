@@ -19,10 +19,11 @@ static struct g1_platform_data pdata = {
 	.gpio_discharge = 5,
 };
 
-static struct spi_device spi_dev = {
-	.dev = {
+static struct spi_board_info spi_dev[] = {
+	{
 		.platform_data = &pdata,
-	}
+		.modalias = "g1-epd",
+	},
 };
 
 /* /dev/epdctl file stub */
@@ -38,10 +39,19 @@ static struct inode epd0 = {
 int main(void)
 {
 	loff_t off = 0;
-	int fctl;
+	int ret, fctl;
 
-	devices_init();
-	_spi_driver->probe(&spi_dev);
+	ret = devices_init();
+	if(ret < 0) {
+		printk("Cannot init devices\n");
+		return -1;
+	}
+
+	ret = spi_register_board_info(spi_dev, ARRAY_SIZE(spi_dev));
+	if(ret < 0) {
+		printk("Cannot probe spi\n");
+		return -1;
+	}
 
 	fctl = cdev_open(&epdctl);
 	if(fctl < 0) {
@@ -52,7 +62,6 @@ int main(void)
 
 	cdev_close(fctl);
 
-	_spi_driver->remove(&spi_dev);
 	devices_exit();
 	return 0;
 }

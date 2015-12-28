@@ -1,8 +1,13 @@
 #ifndef _LINUX_STUB_SPI_H_
 #define _LINUX_STUB_SPI_H_
 
+#include <linux/init.h>
+
+#define SPI_NAME_SIZE 32
+
 struct spi_device {
 	struct device		dev;
+	struct list_head next;
 };
 
 struct spi_driver {
@@ -33,8 +38,13 @@ struct spi_transfer {
 	u32		speed_hz;
 };
 
+struct spi_board_info {
+	void const *platform_data;
+	char modalias[SPI_NAME_SIZE];
+};
+
 int spi_sync_transfer(struct spi_device *spi, struct spi_transfer *xfers,
-	unsigned int num_xfers);
+		unsigned int num_xfers);
 
 static inline void spi_set_drvdata(struct spi_device *spi, void *data)
 {
@@ -48,7 +58,21 @@ static inline void *spi_get_drvdata(struct spi_device *spi)
 
 int spi_setup(struct spi_device *spi);
 
-extern struct spi_driver *_spi_driver;
-#define module_spi_driver(drv) struct spi_driver *_spi_driver = &(drv)
+int spi_register_driver(struct spi_driver *drv);
+void spi_unregister_driver(struct spi_driver *drv);
+
+int spi_register_board_info(struct spi_board_info *info, size_t nb);
+
+#define module_spi_driver(drv)						\
+	static int __ ## drv ## _init(void)				\
+	{								\
+		return spi_register_driver(&drv);			\
+	}								\
+	module_init(__ ## drv ## _init);				\
+	static void __ ## drv ## _exit(void)				\
+	{								\
+		spi_unregister_driver(&drv);				\
+	}								\
+	module_exit(__ ## drv ## _exit);
 
 #endif

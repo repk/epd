@@ -14,10 +14,11 @@ SRC=									\
 	drv-epd_g1.c
 INC=include-stub ..
 OBJ= $(SRC:.c=.o)
+LINKERSCRIPT=initcall.ld
 
 CFLAGS= -O0 -g -DDEBUG=1 -D_BSD_SOURCE -W -Wall -Wno-unused-variable	\
 	-Wno-unused-parameter -Wno-cast-qual -std=c99 $(addprefix -I, $(INC))
-LDFLAGS=
+LDFLAGS= -Wl,-T$(LINKERSCRIPT)
 
 all: $(EXEC)
 
