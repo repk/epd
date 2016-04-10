@@ -926,6 +926,7 @@ static int g1_probe_dt(struct device *dev, struct g1_platform_data *pdata)
 	/* Get gpio for panel_on */
 	pdata->gpio_panel_on = of_get_named_gpio(node, "panel_on-gpios", 0);
 	if(pdata->gpio_panel_on < 0) {
+		ERR("Cannot get panel_on GPIO\n");
 		ret = -EINVAL;
 		goto out;
 	}
@@ -933,6 +934,7 @@ static int g1_probe_dt(struct device *dev, struct g1_platform_data *pdata)
 	/* Get gpio for /reset */
 	pdata->gpio_reset = of_get_named_gpio(node, "reset-gpios", 0);
 	if(pdata->gpio_reset < 0) {
+		ERR("Cannot get reset GPIO\n");
 		ret = -EINVAL;
 		goto out;
 	}
@@ -940,6 +942,7 @@ static int g1_probe_dt(struct device *dev, struct g1_platform_data *pdata)
 	/* Get gpio for border */
 	pdata->gpio_border = of_get_named_gpio(node, "border-gpios", 0);
 	if(pdata->gpio_border < 0) {
+		ERR("Cannot get border GPIO\n");
 		ret = -EINVAL;
 		goto out;
 	}
@@ -947,6 +950,7 @@ static int g1_probe_dt(struct device *dev, struct g1_platform_data *pdata)
 	/* Get gpio for busy */
 	pdata->gpio_busy = of_get_named_gpio(node, "busy-gpios", 0);
 	if(pdata->gpio_busy < 0) {
+		ERR("Cannot get busy GPIO\n");
 		ret = -EINVAL;
 		goto out;
 	}
@@ -954,6 +958,7 @@ static int g1_probe_dt(struct device *dev, struct g1_platform_data *pdata)
 	/* Get gpio for External Discharge */
 	pdata->gpio_discharge = of_get_named_gpio(node, "discharge-gpios", 0);
 	if(pdata->gpio_discharge < 0) {
+		ERR("Cannot get discharge GPIO\n");
 		ret = -EINVAL;
 		goto out;
 	}
