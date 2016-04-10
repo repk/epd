@@ -37,7 +37,7 @@
 		};
 	};
 
-	/* disable spidev and add enalbe epd driver */
+	/* disable spidev and add enable epd driver */
 	fragment@2 {
 		target = <&spi0>;
 		__overlay__ {
@@ -55,12 +55,36 @@
 				spi-max-frequency = <12000000>;
 				status = "okay";
 				pwms = <&pwm  0 5000000>;
-				panel_on-gpio = <&gpio 22 0>;
-				reset-gpio = <&gpio 24 0>;
-				border-gpio = <&gpio 14 0>;
-				busy-gpio = <&gpio 17 0>;
-				discharge-gpio = <&gpio 23 0>;
+				panel_on-gpios = <&gpio 22 0>;
+				reset-gpios = <&gpio 24 0>;
+				border-gpios = <&gpio 14 0>;
+				busy-gpios = <&gpio 17 0>;
+				discharge-gpios = <&gpio 23 0>;
 			};
+		};
+	};
+
+	/* enable i2c */
+	fragment@3 {
+		target = <&i2c0>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* enable i2c */
+	fragment@4 {
+		target = <&i2c1>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* enable i2c */
+	fragment@5 {
+		target = <&i2c2>;
+		__overlay__ {
+			status = "okay";
 		};
 	};
 };
