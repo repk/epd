@@ -10,17 +10,17 @@ usage() {
 
 get_args() {
 	while [ ${#} -ge 1 ]; do
-		if [ "${1}" == "-c" ]; then
+		if [ "${1}" = "-c" ]; then
 			if [ ${#} -ne 1 ]; then
 				usage
 			fi
 			ACTION="CLEAN"
-		elif [ "${1}" == "-b" ]; then
+		elif [ "${1}" = "-b" ]; then
 			if [ ${#} -ne 1 ]; then
 				usage
 			fi
 			ACTION="BLACK"
-		elif [ "${1}" == "-w" ]; then
+		elif [ "${1}" = "-w" ]; then
 			if [ ${#} -ne 2 ]; then
 				usage
 			fi
