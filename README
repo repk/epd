@@ -59,12 +59,15 @@ This driver has been tested on a RPI-B booting a vanilla/mainline kernel. The
 rpi device tree from this kernel has been modified to get this working. The
 patch found in rpi/rpi-mainline.patch can be used. Moreover the kernel needs
 the incoming pwm clock support that can be found in this patchset
-(https://lkml.org/lkml/2015/12/6/74).
+(https://lkml.org/lkml/2015/12/6/74). Kernel from 4.5 have these patches .
 
 This driver can also work with a linux kernel from rpi tree. A devicetree
-overlay for this kernel can be built with "make rpi-devicetree". Then the
-following commands can be entered:
+overlay for this kernel can be built with "make rpi-devicetree". If your
+kernel is older than 4.5.x you have to build a small userland program that will
+set the pwm configuration register to correct values. This program can be built
+with make "rpi-pwmconf". Then the following commands can be entered:
 
+./pwmconf # Only if your kernel is older than 4.5.x
 modprobe spi-bcm2835
 modprobe i2c-bcm2708
 modprobe pwm-bcm2835
@@ -72,8 +75,9 @@ insmod epd.ko
 insmod epd-therm.ko
 insmod epd-g1.ko
 
-If the devicetree is used with rpi-mainline.patch or the overlay has not been
-modified the pin connection is as the following :
+If you use a COG from Embedded Artist and the devicetree is used with
+rpi-mainline.patch or the overlay has not been modified the pin connection is
+as the following :
 
       RPI                  COG1
     +-------+

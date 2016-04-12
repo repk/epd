@@ -1,9 +1,14 @@
+CC := $(CROSS_COMPILE)gcc
+USER_CFLAGS := -W -Wall -std=c99
+USER_LDFLAGS :=
+
 SRC_EPD := core.c
 SRC_G1 := epd_g1.c
 SRC_EPD_THERM := epd_therm_i2c.c
 SRC := $(SRC_EPD_THERM) $(SRC_EPD) $(SRC_G1)
 INC := epd.h epd_therm.h epd_g1.h
 DTOVERLAY := rpi/rpi-epd-overlay.dts
+PWMCONFSRC := rpi/pwmconf.c
 
 BUILDDIR := build
 KBUILD := $(BUILDDIR)/epd
@@ -36,6 +41,12 @@ default: $(SRC) $(INC) Makefile | builddir
 	$(MAKE) -C $(KERNDIR) M=$(PWD)/$(KBUILD) modules
 	rm $(SRC:%=$(KBUILD)/%) $(INC:%=$(KBUILD)/%) $(KBUILD)/Makefile
 
+rpi-pwmconf: $(PWMCONFSRC:%.c=$(KBUILD)/%.o)
+	$(CC) $(USER_LDFLAGS) $(USER_CFLAGS) -o $(KBUILD)/rpi/pwmconf $<
+
+$(KBUILD)/%.o: %.c | builddir
+	$(CC) -c $(USER_CFLAGS) -o $@ $<
+
 rpi-devicetree: $(DTOVERLAY:%.dts=$(KBUILD)/%.dtb)
 
 $(KBUILD)/%.dtb: %.dts | builddir
@@ -48,6 +59,7 @@ builddir:
 clean:
 	rm -f $(KOBJ:%=$(KBUILD)/%)
 	rm -f $(DTOVERLAY:%.dts=$(KBUILD)/%.dtb)
+	rm -f $(PWMCONFSRC:%.c=$(KBUILD)/%.o)
 
 distclean:
 	rm -rf $(BUILDDIR)
