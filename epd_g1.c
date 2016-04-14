@@ -649,7 +649,17 @@ static int g1_init_display(struct g1 *g1)
 	while(gpio_get_value(g1->gpio_busy))
 		cpu_relax();
 
-	ret = spi_send_cmd(g1->spi, SPI_CMD_CHANSEL_2_7);
+	switch(g1->type) {
+	case G1_TYPE_1_44:
+		ret = spi_send_cmd(g1->spi, SPI_CMD_CHANSEL_1_44);
+		break;
+	case G1_TYPE_2:
+		ret = spi_send_cmd(g1->spi, SPI_CMD_CHANSEL_2);
+		break;
+	case G1_TYPE_2_7:
+		ret = spi_send_cmd(g1->spi, SPI_CMD_CHANSEL_2_7);
+		break;
+	}
 	if(ret < 0)
 		goto out;
 
@@ -669,7 +679,17 @@ static int g1_init_display(struct g1 *g1)
 	if(ret < 0)
 		goto out;
 
-	ret = spi_send_cmd(g1->spi, SPI_CMD_GATE_SRC_LVL_2_7);
+	switch(g1->type) {
+	case G1_TYPE_1_44:
+		ret = spi_send_cmd(g1->spi, SPI_CMD_GATE_SRC_LVL_1_44);
+		break;
+	case G1_TYPE_2:
+		ret = spi_send_cmd(g1->spi, SPI_CMD_GATE_SRC_LVL_2);
+		break;
+	case G1_TYPE_2_7:
+		ret = spi_send_cmd(g1->spi, SPI_CMD_GATE_SRC_LVL_2_7);
+		break;
+	}
 	if(ret < 0)
 		goto out;
 	mdelay(5);
